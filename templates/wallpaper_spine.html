@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>CrossCore Spine Wallpaper</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #05070d; }
+  #bg-layer { position: fixed; inset: 0; z-index: 0; {{BG_CSS}} }
+  #canvas { display: block; width: 100vw; height: 100vh; position: relative; z-index: 1; background: transparent; cursor: default; }
+  #subtitle {
+    position: fixed; left: 50%; bottom: 7%;
+    transform: translate(-50%, 12px);
+    max-width: min(78vw, 980px);
+    padding: 12px 22px;
+    border: 1px solid rgba(255, 255, 255, .18);
+    background: rgba(8, 12, 20, .55);
+    color: #f2f6ff;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    font-size: clamp(15px, 1.55vw, 22px);
+    line-height: 1.6;
+    letter-spacing: .02em;
+    text-align: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .28s ease, transform .28s ease;
+    z-index: 3;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, .8);
+  }
+  #subtitle.visible { opacity: 1; transform: translate(-50%, 0); }
+  #hint {
+    position: fixed; right: 18px; bottom: 16px;
+    font-family: "Microsoft YaHei", sans-serif;
+    font-size: 12px; color: rgba(255, 255, 255, .38);
+    letter-spacing: .06em; z-index: 3; pointer-events: none;
+    transition: opacity .8s ease;
+  }
+  /* 交互区域叠加层：矩形与提示由 spine-app.js 动态 createElement，样式必须写在这里 */
+  #areas {
+    position: fixed; inset: 0; z-index: 2; overflow: hidden; pointer-events: none;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  }
+  .spine-areas-empty {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: rgba(8, 12, 20, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: rgba(255, 255, 255, 0.68);
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .spine-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: 1.5px solid rgba(255, 205, 112, 0.5);
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(255, 190, 70, 0.14), rgba(255, 150, 30, 0.07));
+    box-shadow: 0 0 10px rgba(255, 178, 44, 0.26), inset 0 0 10px rgba(255, 178, 44, 0.14);
+    animation: spine-area-float 1.8s ease-in-out infinite;
+  }
+  /* 呼吸式透明度：composited 动画，多个矩形也便宜 */
+  @keyframes spine-area-float {
+    0%, 100% { opacity: 0.45; }
+    50% { opacity: 0.85; }
+  }
+  .spine-area.dormant {
+    border: 1.5px dashed rgba(255, 255, 255, 0.38);
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: none;
+    animation: none;
+  }
+  .spine-area span {
+    max-width: calc(100% - 8px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.5;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: rgba(10, 14, 22, 0.42);
+    color: rgba(255, 227, 160, 0.8);
+  }
+  .spine-area.tiny span { display: none; }
+  .spine-area.dormant span { color: rgba(255, 255, 255, 0.5); background: rgba(10, 14, 22, 0.3); }
+</style>
+</head>
+<body>
+<div id="bg-layer"></div>
+<canvas id="canvas"></canvas>
+<div id="areas"></div>
+<div id="subtitle"></div>
+<div id="hint">点击立绘互动</div>
+<script src="vendor/spine-webgl.min.js"></script>
+<script src="wallpaper-layout.js"></script>
+<script src="spine-app.js"></script>
+<script>window.__CROSS_VOICE = {{VOICE_JSON}};</script>
+<script>
+window.__CROSS_INIT = {
+  scale: {{SCALE}}, ox: {{OFFSET_X}}, oy: {{OFFSET_Y}},
+  alignment: "{{ALIGNMENT}}", storageKey: {{LAYOUT_STORAGE_KEY}},
+  options: {{OPTIONS_JSON}},
+  background: {{BG_JSON}}
+};
+</script>
+<script>
+(function () {
+  var canvas = document.getElementById('canvas');
+  var subtitle = document.getElementById('subtitle');
+  var init = window.__CROSS_INIT;
+  var layoutControl = WallpaperLayout.layoutController(canvas, {
+    scale: init.scale, offsetX: init.ox, offsetY: init.oy,
+    alignment: init.alignment, storageKey: init.storageKey,
+    onChange: function (state) { if (app) app.setLayout(state); }
+  });
+  var app = SpineApp.create(canvas, {
+    prefix: 'assets/',
+    atlasPath: 'character.atlas',
+    jsonPath: 'character.json',
+    actionsPath: 'assets/actions.json',
+    voice: window.__CROSS_VOICE,
+    areasEl: document.getElementById('areas'),
+    background: init.background,
+    layout: layoutControl.state,
+    subtitleEl: subtitle,
+    options: init.options,
+    isAdjusting: function () { return layoutControl.state.adjustSize; },
+    onError: function (message) {
+      subtitle.textContent = '立绘加载失败：' + message;
+      subtitle.classList.add('visible');
+    }
+  });
+  window.__crossApp = app;
+  window.addEventListener('resize', function () {
+    app.setLayout(layoutControl.state);
+  });
+  // 提示语在首次互动后淡出
+  canvas.addEventListener('pointerup', function () {
+    var hint = document.getElementById('hint');
+    if (hint) hint.style.opacity = '0';
+  }, { once: true });
+
+  window.wallpaperPropertyListener = {
+    applyUserProperties: function (properties) {
+      try { layoutControl.applyUserProperties(properties); } catch (e) {}
+      var opts = {};
+      if (properties.voice) opts.voice = properties.voice.value === true || properties.voice.value === 1;
+      if (properties.interact) opts.interact = properties.interact.value === true || properties.interact.value === 1;
+      if (properties.subtitle) opts.subtitle = properties.subtitle.value === true || properties.subtitle.value === 1;
+      if (properties.volume) opts.volume = Math.max(0, Math.min(100, Number(properties.volume.value))) / 100;
+      if (properties.targetfps) opts.targetFps = Number(properties.targetfps.value);
+      if (properties.opening) opts.intro = properties.opening.value === true || properties.opening.value === 1;
+      if (Object.keys(opts).length) app.setOptions(opts);
+      if (properties.showareas) {
+        app.setAreasVisible(properties.showareas.value === true || properties.showareas.value === 1);
+      }
+    }
+  };
+})();
+</script>
+</body>
+</html>
